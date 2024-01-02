@@ -24,12 +24,16 @@ export class EDAAppStack extends cdk.Stack {
 
      // Integration infrastructure
 
+     const badImagesQueue = new sqs.Queue(this, "bad-img-queue", {
+      retentionPeriod: cdk.Duration.minutes(30)
+    })
+
     const imageProcessQueue = new sqs.Queue(this, "img-created-queue", {
     receiveMessageWaitTime: cdk.Duration.seconds(10),
-    });
-
-    const mailerQ = new sqs.Queue(this, "mailer-queue", {
-      receiveMessageWaitTime: cdk.Duration.seconds(10),
+    deadLetterQueue:{
+      queue: badImagesQueue,
+      maxReceiveCount: 2
+    }
     });
 
     const newImageTopic = new sns.Topic(this, "NewImageTopic", {
@@ -40,7 +44,7 @@ export class EDAAppStack extends cdk.Stack {
       new subs.SqsSubscription(imageProcessQueue)
     );
 
-    newImageTopic.addSubscription(new subs.SqsSubscription(mailerQ));
+
 
   // Lambda functions
 
@@ -63,6 +67,13 @@ export class EDAAppStack extends cdk.Stack {
     entry: `${__dirname}/../lambdas/mailer.ts`,
   });
 
+  const rejectionMailerFn = new lambdanode.NodejsFunction(this, "rejection-mailer-function", {
+    runtime: lambda.Runtime.NODEJS_16_X,
+    memorySize: 1024,
+    timeout: cdk.Duration.seconds(3),
+    entry: `${__dirname}/../lambdas/rejectionMailer.ts`,
+  });
+
   // Event triggers
 
   imagesBucket.addEventNotification(
@@ -75,13 +86,15 @@ export class EDAAppStack extends cdk.Stack {
     maxBatchingWindow: cdk.Duration.seconds(10),
   });
 
-  const newImageMailEventSource = new events.SqsEventSource(mailerQ, {
+  const failedImageEventSource = new events.SqsEventSource(badImagesQueue, {
     batchSize: 5,
     maxBatchingWindow: cdk.Duration.seconds(10),
-  }); 
+  })
 
+
+  newImageTopic.addSubscription(new subs.LambdaSubscription(mailerFn))   
   processImageFn.addEventSource(newImageEventSource);
-  mailerFn.addEventSource(newImageMailEventSource);
+  rejectionMailerFn.addEventSource(failedImageEventSource);
 
   // Permissions
 
@@ -99,6 +112,19 @@ export class EDAAppStack extends cdk.Stack {
     })
   );
 
+  rejectionMailerFn.addToRolePolicy(
+    new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        "ses:SendEmail",
+        "ses:SendRawEmail",
+        "ses:SendTemplatedEmail",
+      ],
+      resources: ["*"],
+    })
+  );
+
+
    // REST API 
    const api = new apig.RestApi(this, "RestAPI", {
     description: "demo api",
@@ -113,18 +139,6 @@ export class EDAAppStack extends cdk.Stack {
       allowOrigins: ["*"],
     },
   });
-
-  const moviesEndpoint = api.root.addResource("movies");
-  moviesEndpoint.addMethod(
-    "GET",
-    new apig.LambdaIntegration(getAllMoviesFn, { proxy: true })
-  );
-
-  const movieEndpoint = moviesEndpoint.addResource("{movieId}");
-  movieEndpoint.addMethod(
-    "GET",
-    new apig.LambdaIntegration(getMovieByIdFn, { proxy: true })
-  );
 
   // Output
   

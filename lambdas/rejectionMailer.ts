@@ -1,5 +1,4 @@
 import { SQSHandler } from "aws-lambda";
-import { SNSHandler } from "aws-lambda";
 // import AWS from 'aws-sdk';
 import { SES_EMAIL_FROM, SES_EMAIL_TO, SES_REGION } from "../env";
 import {
@@ -22,13 +21,14 @@ type ContactDetails = {
 
 const client = new SESClient({ region: "eu-west-1" });
 
-export const handler: SNSHandler = async (event: any) => {
+export const handler: SQSHandler = async (event: any) => {
   console.log("Event ", event);
   for (const record of event.Records) {
-    const snsMessage = JSON.parse(record.Sns.Message);
-    
+    const recordBody = JSON.parse(record.body);
+    const snsMessage = JSON.parse(recordBody.Message);
+
     if (snsMessage.Records) {
-      console.log("Notification body ", JSON.stringify(snsMessage));
+      console.log("Record body ", JSON.stringify(snsMessage));
       for (const messageRecord of snsMessage.Records) {
         const s3e = messageRecord.s3;
         const srcBucket = s3e.bucket.name;
@@ -38,7 +38,7 @@ export const handler: SNSHandler = async (event: any) => {
           const { name, email, message }: ContactDetails = {
             name: "The Photo Album",
             email: SES_EMAIL_FROM,
-            message: `We received your Image. Its URL is s3://${srcBucket}/${srcKey}`,
+            message: `Sorry, but we could not process your image upload (URL: s3://${srcBucket}/${srcKey}). Ensure the image is of a supported file type (.jpeg or .png) and try uploading again.`,
           };
           const params = sendEmailParams({ name, email, message });
           await client.send(new SendEmailCommand(params));
@@ -62,14 +62,10 @@ function sendEmailParams({ name, email, message }: ContactDetails) {
           Charset: "UTF-8",
           Data: getHtmlContent({ name, email, message }),
         },
-        // Text: {
-        //   Charset: "UTF-8",
-        //   Data: getTextContent({ name, email, message }),
-        // },
       },
       Subject: {
         Charset: "UTF-8",
-        Data: `New image Upload`,
+        Data: `Error Processing Image`,
       },
     },
     Source: SES_EMAIL_FROM,
