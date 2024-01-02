@@ -25,7 +25,7 @@ e.g.
 + Confirmation Mailer - Fully implemented.
 + Rejection Mailer - Fully implemented.
 + Process Image - Fully implemented
-+ Process Delete - Partially implemented.
++ Process Delete - Partially implemented (Only removes it from the S3 Bucket).
 + Update Table - Not implemented.
 
 ### Phase 3 (if relevant).
