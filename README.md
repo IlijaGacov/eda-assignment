@@ -10,11 +10,11 @@ __YouTube Demo link__ - [The URL of your demonstration of the app.]
 
 [ List the Lambda functions in this phase's architecture and state their working status.]
 
-, e.g.
+e.g.
 
 + Confirmation Mailer - Fully implemented.
 + Rejection Mailer - Fully implemented.
-+ Process Image - Partially implemented
++ Process Image - Fully implemented
 
 ### Phase 2 (if relevant).
 

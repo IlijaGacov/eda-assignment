@@ -8,8 +8,25 @@ import {
   S3Client,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 
 const s3 = new S3Client();
+const ddbDocClient = createDDbDocClient();
+
+function createDDbDocClient() {
+  const ddbClient = new DynamoDBClient({ region: process.env.REGION });
+  const marshallOptions = {
+    convertEmptyValues: true,
+    removeUndefinedValues: true,
+    convertClassInstanceToMap: true,
+  };
+  const unmarshallOptions = {
+    wrapNumbers: false,
+  };
+  const translateConfig = { marshallOptions, unmarshallOptions };
+  return DynamoDBDocumentClient.from(ddbClient, translateConfig);
+}
 
 export const handler: SQSHandler = async (event) => {
   console.log("Event ", event);
@@ -41,6 +58,16 @@ export const handler: SQSHandler = async (event) => {
           throw new Error("Unsupported image type: ${imageType. ");
         }
         // process image upload 
+        console.log("inserting into dynamoDB")
+
+        const commandOutput = await ddbDocClient.send(
+          new PutCommand({
+            TableName: process.env.TABLE_NAME,
+            Item: {
+              "ImageName": srcKey
+            }
+          })
+        )
       }
     }else{
       console.log('No records in record body')
